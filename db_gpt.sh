@@ -6,10 +6,13 @@
 # http://dckg.net
 #
 # It installs an optionally encrypted, minimal debian system, based on LVM and GPT.
-# The installation process is fully automatic and unattended. 
+# The installation process is fully automatic and unattended.
+# Install time: 50 Mbit/s link, HDD, 1GB RAM, 4x3,4Ghz Intel Xeon: <= 5 minutes. :)
+# 
 # Script won't do any cleanup. If you have active RAID or PVs, it will fail. 
 # 
 # Debian installation is done from within a Debian-Environment itself.
+# System will first be installed into RAM, configured, and is then copied to drive.
 #
 # Modify to your requirements in [USER CONFIGURATION] below.
 # Script has to be run as root.
@@ -23,9 +26,17 @@
 #
 # Initial root password is root.
 #
+# Important Notice For RAID
+# Raid is only used for data partition. /boot, EFI-Boot-Partition, BIOS-Boot-Partition are not duplicated!
+# That means, if primary DRIVE fails, you might loose the ability to reboot until you recreate these partitons, reinstall initramfs & bootloader...
+# AFAIK ATM it is not possible to use RAID for EFI/boot partiton.
+# After first reboot (after installation with live image), mdadm does a resync. This is normal.
 # 
+# Bugs / Feedback / Contribute
+# Bugreports / feedback like working configurations are greatly appreciated.
+# Contributions are welcome. 
 #  
-#   License: 
+# License (GPL v3): 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
 #    the Free Software Foundation, either version 3 of the License, or
@@ -51,14 +62,28 @@ ROOTFS_SIZE="8G" # lvm compatible notation
 SUITE=jessie
 DEBIAN_VERSION=8 # int, needed for release signature files
 #DEBIAN_MIRROR="http://mirrors.online.net/debian" # will only work from within online.net's network
-DEBIAN_MIRROR="http://ftp2.de.debian.org/debian"
-#DEBIAN_MIRROR="http://mirror.1und1.de/debian"
-# ARCH = amd64, has to be changed manually
+#DEBIAN_MIRROR="http://ftp.de.debian.org/debian"
+DEBIAN_MIRROR="http://mirror.1und1.de/debian" # Located in Karlsruhe / Germany, 2Gbit/s
+# ARCH = amd64, has to be changed manually (Ctrl+F ...)
+
+# RAID Config
+SETUP_RAID=0 # 1 true, 0 false, setup RAID
+DRIVE_RAID=sdb # second drive for RAID
+RAID_LEVEL=mirror # mirror (RAID 1) or stripe (RAID 0), see mdadm man page
 # [USER CONFIGURATION END]
 
-# [TODO]
-# RAID 1 support
+# Tested Configurations (= successful boot after script was run), using grml live linux from 2014
+# jessie
+# crypto 0, BIOS
+# crypto 0, EFI
+# crypto 1, BIOS ( Ubuntu 14.xx live cd, grml )
+# crypto 1, EFI
+# crypto 0, raid 1, BIOS
+# crypto 1, raid 1, BIOS
+#
 
+
+ROOTFS_DEV=${DRIVE}4
 
 
 DEFAULT_COLOR="\x1b[0m"
@@ -139,6 +164,9 @@ function finalize_chroot () {
     set_user_password root root
     set_sshd_settings
     setup_zsh
+    rm /root/script.sh
+    rm /root/ischroot
+    rm /root/ssh_localhost_fingerprints
 }
 
 export -f finalize_chroot
@@ -263,38 +291,51 @@ fi;
 
 warn "[PART 2]"
 info "[PARTITIONING DRIVE]"
-sgdisk -Z /dev/${DRIVE} || die # zero previous partition tables
+sgdisk -Z /dev/${DRIVE} || die # zero previous partition table
 sgdisk -og /dev/${DRIVE} || die
 sgdisk -n 1:2048:4095 -c 1:"BIOS Boot Partition" -t 1:ef02 /dev/${DRIVE} || die # 1M
 sgdisk -n 2:4096:413695 -c 2:"EFI System Partition" -t 2:ef00 /dev/${DRIVE} || die # 200M
 sgdisk -n 3:413696:1028095 -c 3:"Linux /boot" -t 3:8300 /dev/${DRIVE} || die # 300M
 ENDSECTOR=$(sgdisk -E /dev/{DRIVE})
-if [ $CRYPTO == 0 ]; then # just for convenience...
-    sgdisk -n 4:1028096:$ENDSECTOR -c 4:"Linux LVM" -t 4:8e00 /dev/${DRIVE} || die
+if [ $SETUP_RAID == 0 ]; then
+    if [ $CRYPTO == 0 ]; then # just for convenience...
+        sgdisk -n 4:1028096:$ENDSECTOR -c 4:"Linux LVM" -t 4:8e00 /dev/${DRIVE} || die
+    else
+        sgdisk -n 4:1028096:$ENDSECTOR -c 4:"Linux dm-crypt" -t 4:8300 /dev/${DRIVE} || die
+    fi
 else
-    sgdisk -n 4:1028096:$ENDSECTOR -c 4:"Linux dm-crypt" -t 4:8300 /dev/${DRIVE} || die
-fi
+    sgdisk -n 4:1028096:$ENDSECTOR -c 4:"Linux RAID $RAID_LEVEL" -t 4:fd00 /dev/${DRIVE} || die
+fi;
 sgdisk --print /dev/${DRIVE} || die
+
+if [ $SETUP_RAID == 1 ]; then # copy partition table to second drive
+    info "[SETUP RAID]"
+    sgdisk -R /dev/$DRIVE_RAID /dev/$DRIVE || die
+    sgdisk -G /dev/$DRIVE_RAID || die
+fi;
 partprobe
+
+if [ $SETUP_RAID == 1 ]; then
+    echo y | mdadm --create --verbose /dev/md0 --level=$RAID_LEVEL --raid-devices=2 /dev/${DRIVE}4 /dev/${DRIVE_RAID}4 || die
+    ROOTFS_DEV=md0
+fi;
+
 
 if [ $CRYPTO == 0 ]; then
     info "[SETUP LVM]"
-
-    setup_lvm /dev/${DRIVE}4
-
+    setup_lvm /dev/$ROOTFS_DEV
 else
     info "[SETUP ENCRYPTION]"
 
     info  "Luks Format, enter passphrase..."
     read -rp "enter passphrase and hit [enter]" pass
     info "pass: $pass";
-    echo -n $pass | cryptsetup luksFormat -c aes-xts-plain64 -s 512 -h sha512 -i 2000 /dev/${DRIVE}4 -
-    echo -n $pass | cryptsetup luksOpen /dev/${DRIVE}4 ${DRIVE}4_crypt -d -
+    echo -n $pass | cryptsetup luksFormat -c aes-xts-plain64 -s 512 -h sha512 -i 2000 /dev/$ROOTFS_DEV -
+    echo -n $pass | cryptsetup luksOpen /dev/$ROOTFS_DEV ${ROOTFS_DEV}_crypt -d -
     pass=0
     info "[SETUP LVM]"
-    setup_lvm /dev/mapper/${DRIVE}4_crypt
+    setup_lvm /dev/mapper/${ROOTFS_DEV}_crypt
 fi
-
 
 
 export DEBIAN_FRONTEND=noninteractive;
@@ -306,6 +347,11 @@ debug "mount boot"
 mount /dev/${DRIVE}3 boot || die
 
 mkdosfs -F 32 -I /dev/${DRIVE}2 || die # EFI partition
+
+if [ $SETUP_RAID == 1 ]; then
+    mkfs.ext4 -O ^has_journal -F /dev/${DRIVE_RAID}3 || die
+    mkdosfs -F 32 -I /dev/${DRIVE_RAID}2 || die # EFI partition
+fi;
 
 info "[RSYNC DEBIAN ${DEBIAN_VERSION}: $SUITE TO DRIVE]"
 rsync -aAX --info=progress2 --exclude={"/parentroot","/dev/*","/proc/*","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/lost+found"} / /mnt/chroot/ || die
@@ -326,7 +372,7 @@ chroot . /bin/bash -c "su -c 'touch /root/.ssh/authorized_keys'"
 if [ $CRYPTO == 0 ]; then
     echo "/dev/mapper/vg0-root / ext4 defaults,errors=remount-ro 0 1" >> etc/fstab;
 else
-    echo "${DRIVE}4_crypt UUID=$(blkid -s UUID -o value /dev/${DRIVE}4) none luks" >> etc/crypttab;
+    echo "${ROOTFS_DEV}_crypt UUID=$(blkid -s UUID -o value /dev/$ROOTFS_DEV) none luks" >> etc/crypttab;
     echo "/dev/mapper/vg0-root / ext4 defaults,errors=remount-ro 0 1" >> etc/fstab;
 fi
 
