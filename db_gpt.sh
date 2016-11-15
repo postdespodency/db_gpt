@@ -222,7 +222,7 @@ if [ ! -e /root/ischroot ]; then
 
 
     info "[INSTALL DEBIAN ${DEBIAN_VERSION}: $SUITE TO RAMDISK]"
-    debootstrap --keyring=debootstrap.gpg --arch=amd64 --include=debian-archive-keyring,nano,zsh,ca-certificates,wget,lvm2,cryptsetup,parted,gdisk,rsync,mdadm,dosfstools,linux-image-amd64,ntp,grub2,openssh-server $SUITE rootfs-debian $DEBIAN_MIRROR | tee debootstrap.log || die
+    debootstrap --keyring=debootstrap.gpg --arch=amd64 --include=debian-archive-keyring,nano,zsh,locales,ca-certificates,wget,lvm2,cryptsetup,parted,gdisk,rsync,mdadm,dosfstools,linux-image-amd64,ntp,grub2,openssh-server $SUITE rootfs-debian $DEBIAN_MIRROR | tee debootstrap.log || die
 
     grep -q "Valid Release signature" debootstrap.log
     if [ $? -ne 0 ]; then
@@ -366,8 +366,12 @@ echo "UUID=$(blkid -s UUID -o value /dev/${DRIVE}3) /boot ext4 defaults 0 2" > e
 if [ $EFI == 1 ]; then
     echo "UUID=$(blkid -s UUID -o value /dev/${DRIVE}2) /boot/efi vfat defaults 0 2" >> etc/fstab;
 fi
+
 chroot . /bin/bash -c "su -c 'mkdir -p /root/.ssh'"
 chroot . /bin/bash -c "su -c 'touch /root/.ssh/authorized_keys'"
+
+chroot . /bin/bash -c "su -c 'locale-gen \"C.UTF-8\"'"
+chroot . /bin/bash -c "su -c 'echo LANG=\"C.UTF-8\" > /etc/default/locale'"
 
 if [ $CRYPTO == 0 ]; then
     echo "/dev/mapper/vg0-root / ext4 defaults,errors=remount-ro 0 1" >> etc/fstab;
