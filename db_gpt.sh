@@ -21,7 +21,8 @@
 # You might want to run
 # apt-get install kbd # to setup keyboard-layout
 # dpkg-reconfigure tzdata # to set timezone
-# dpkg-reconfigure locales # to set language
+# dpkg-reconfigure locales # to set language different than english
+# lvresize --resizefs --size 12345G /dev/mapper/vg0-root to increase rootfs space
 # later.
 #
 # Initial root password is root.
@@ -58,7 +59,7 @@ ABSOLUTE_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_
 DRIVE=sda # target drive, where to install system. ALL DATA WILL BE LOST!
 EFI=0 # install UEFI bootloader, live system has to be booted in EFI mode for this to work
 CRYPTO=0 # create encrypted lvm + dropbear for pre boot authentication, - will ask for password after debootstrap
-ROOTFS_SIZE="8G" # lvm compatible notation
+ROOTFS_SIZE="1G" # lvm compatible notation
 SUITE=jessie
 DEBIAN_VERSION=8 # int, needed for release signature files
 #DEBIAN_MIRROR="http://mirrors.online.net/debian" # will only work from within online.net's network
