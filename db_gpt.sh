@@ -167,7 +167,6 @@ function finalize_chroot () {
     setup_zsh
     rm /root/script.sh
     rm /root/ischroot
-    rm /root/ssh_localhost_fingerprints
 }
 
 export -f finalize_chroot
@@ -390,6 +389,9 @@ if [ $CRYPTO == 1 ]; then
     # Ctrl+F
     # ip=dhcp
     #
+    # static ip
+    # ip=<client-ip>:<server-ip>:<gw-ip>:<netmask>:<hostname>:<device>:<autoconf>:
+    # ip=192.168.123.123::192.168.123.1:255.255.255.0::eth0:none
     chroot . /bin/bash -c "su -c 'echo \"export IP=dhcp\" >> /etc/initramfs-tools/initramfs.conf'"
 
     NETWORK_CARD_DRIVER=$(cat /sys/class/net/eth0/device/uevent | grep DRIVER | awk '{print substr($0,8)}')
