@@ -2,7 +2,7 @@
 #
 # Debootstrap script for fully encrypted Debian 8 installation, pre-boot authentication. 
 # 
-# (c) 2016 David Gressel
+# (c) 2016-2017 David Gressel
 # http://dckg.net
 #
 # It installs an optionally encrypted, minimal debian system, based on LVM and GPT.
@@ -81,6 +81,9 @@ RAID_LEVEL=mirror # mirror (RAID 1) or stripe (RAID 0), see mdadm man page
 # crypto 0, raid 1, BIOS
 # crypto 1, raid 1, BIOS
 #
+# stretch
+# crypto 0, EFI
+# crypto 1, EFI
 
 
 ROOTFS_DEV=${DRIVE}4
@@ -386,7 +389,7 @@ if [ $CRYPTO == 1 ]; then
     chroot . /bin/bash -c "su-c 'update-initramfs -u -k all'"
     cat etc/initramfs-tools/root/.ssh/id_rsa | tee > root/.ssh/id_rsa_dropbear
     chroot . /bin/bash -c "su -c 'chmod 400 ~/.ssh/id_rsa_dropbear'"
-    chroot . /bin/bash -c "su -c 'ssh-keygen -yf ~/.ssh/id_rsa_dropbear > ~/.ssh/id_rsa_dropbear.pub'"
+    chroot . /bin/bash -c "su -c 'echo | ssh-keygen -yf ~/.ssh/id_rsa_dropbear > ~/.ssh/id_rsa_dropbear.pub'"
     chroot . /bin/bash -c "su -c 'ssh-keygen -lf ~/.ssh/id_rsa_dropbear.pub >> ~/ssh_localhost_fingerprints'"
     
     info "dropbear private key, written to /root/temp-ramdisk/rootfs-debian/mnt/chroot/root/.ssh/id_rsa_dropbear"
