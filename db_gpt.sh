@@ -384,13 +384,13 @@ if [ $CRYPTO == 1 ]; then
     cat etc/initramfs-tools/root/.ssh/id_rsa | tee > root/.ssh/id_rsa_dropbear
     chroot . /bin/bash -c "su -c 'chmod 400 ~/.ssh/id_rsa_dropbear'"
     chroot . /bin/bash -c "su -c 'ssh-keygen -yf ~/.ssh/id_rsa_dropbear > ~/.ssh/id_rsa_dropbear.pub'"
-    chroot . /bin/bash -c "su -c 'find etc/ssh/ -name \*.pub -type f -exec  ssh-keygen -lf {} \; > ~/ssh_localhost_fingerprints'"
     chroot . /bin/bash -c "su -c 'ssh-keygen -lf ~/.ssh/id_rsa_dropbear.pub >> ~/ssh_localhost_fingerprints'"
     
     info "dropbear private key, written to /root/temp-ramdisk/rootfs-debian/mnt/chroot/root/.ssh/id_rsa_dropbear"
     debug "initramfs modules"
     cat etc/initramfs-tools/modules
 fi
+chroot . /bin/bash -c "su -c 'find etc/ssh/ -name \*.pub -type f -exec  ssh-keygen -lf {} \; >> ~/ssh_localhost_fingerprints'"
 
 #service udev restart
 info "[INSTALL BOOTLOADER]"
