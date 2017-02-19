@@ -213,7 +213,7 @@ if [ ! -e /root/ischroot ]; then
 
 
     info "[INSTALL DEBIAN ${DEBIAN_VERSION}: $SUITE TO RAMDISK]"
-    debootstrap --keyring=debootstrap.gpg --arch=amd64 --include=debian-archive-keyring,nano,zsh,locales,ca-certificates,wget,lvm2,cryptsetup,parted,gdisk,rsync,mdadm,dosfstools,linux-image-amd64,ntp,grub2,openssh-server $SUITE rootfs-debian $DEBIAN_MIRROR | tee debootstrap.log || die
+    debootstrap --keyring=debootstrap.gpg --arch=amd64 --include=debian-archive-keyring,nano,zsh,locales,ca-certificates,wget,lvm2,cryptsetup,parted,gdisk,rsync,mdadm,dosfstools,linux-image-amd64,busybox,ntp,grub2,openssh-server $SUITE rootfs-debian $DEBIAN_MIRROR | tee debootstrap.log || die
 
     grep -q "Valid Release signature" debootstrap.log
     if [ $? -ne 0 ]; then
@@ -365,7 +365,7 @@ else
 fi
 
 if [ $CRYPTO == 1 ]; then
-    chroot . /bin/bash -c "su -c 'apt-get install initramfs-tools busybox dropbear -y;'"
+    chroot . /bin/bash -c "su -c 'apt-get install initramfs-tools dropbear -y;'"
     chroot . /bin/bash -c "su -c 'echo \"DEVICE=eth0\" >> /etc/initramfs-tools/initramfs.conf'"
     #
     # Pre-boot IP configuration, consult the kernel docs for more info: 
