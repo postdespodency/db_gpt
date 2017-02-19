@@ -344,7 +344,7 @@ sync
 info "[CHROOT INTO THE SYSTEM]"
 for dir in dev proc sys mnt; do mount --bind /$dir $dir; done
 echo "UUID=$(blkid -s UUID -o value /dev/${DRIVE}3) /boot ext4 defaults 0 2" > etc/fstab;
-if [ modprobe efivars ]; then
+if modprobe efivars; then
     echo "UUID=$(blkid -s UUID -o value /dev/${DRIVE}2) /boot/efi vfat defaults 0 2" >> etc/fstab;
 fi
 
@@ -394,7 +394,7 @@ chroot . /bin/bash -c "su -c 'find etc/ssh/ -name \*.pub -type f -exec  ssh-keyg
 
 #service udev restart
 info "[INSTALL BOOTLOADER]"
-if [ modprobe efivars ]; then
+if modprobe efivars; then
     info "[INSTALL EFI BOOTLOADER]"
     chroot . /bin/bash -c "su -c 'mkdir -p /boot/efi'"
     chroot . /bin/bash -c "su -c 'mount /dev/${DRIVE}2 /boot/efi'"
