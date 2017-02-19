@@ -257,7 +257,7 @@ Pin-Priority: 200" > etc/apt/preferences
     cp /etc/network/interfaces etc/network/interfaces # copy host network configuration into new system
 
     debug "CHROOTING INTO RAMDISK SYSTEM!"
-    chroot . /bin/bash -c "su -c '/root/script.sh'"
+    chroot . /bin/bash -c "su -c '/root/script.sh | tee -a /tmp/install.log'"
 
     exit
     cd -
