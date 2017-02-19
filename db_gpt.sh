@@ -57,7 +57,6 @@ ABSOLUTE_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_
 
 # [USER CONFIGURATION]
 DRIVE=sda # target drive, where to install system. ALL DATA WILL BE LOST!
-EFI=0 # install UEFI bootloader, live system has to be booted in EFI mode for this to work
 CRYPTO=0 # create encrypted lvm + dropbear for pre boot authentication, - will ask for password after debootstrap
 ROOTFS_SIZE="1G" # lvm compatible notation
 SUITE=jessie
@@ -106,13 +105,14 @@ function warn () {
     echo -e $YELLOW$1$DEFAULT_COLOR
 }
 
-function error () {
-    echo -e $RED$1$DEFAULT_COLOR
-}
-
 function die () {
     error "FAILURE! EXITING SCRIPT NOW!"
     exit
+}
+
+function error () {
+    echo -e $RED$1$DEFAULT_COLOR
+    die
 }
 
 function partition_lvm () {
@@ -189,14 +189,6 @@ debug "script path: $ABSOLUTE_PATH"
 #
 if [ ! -e /root/ischroot ]; then
 
-    if [ $EFI == 1 ]; then
-        modprobe efivars
-        if [ $? -ne 0 ]; then
-            error "system not booted in efi mode!"
-            die
-        fi
-    fi
-
     warn "[PART 1]"
     cd ~
     mkdir -p /mnt/chroot/
@@ -227,16 +219,12 @@ if [ ! -e /root/ischroot ]; then
     grep -q "Valid Release signature" debootstrap.log
     if [ $? -ne 0 ]; then
         error "debootstrap failed / release signatures not validated"
-        die
     fi;
     cd rootfs-debian
     mkdir parentroot
     chmod 700 parentroot
-    mount -o bind /proc proc
-    mount -o bind /sys sys
-    mount -o bind /dev dev
-    mount -o bind /mnt mnt
-    mount -o bind / parentroot
+    for dir in dev proc sys mnt; do mount --bind /$dir $dir; done
+    mount --bind / parentroot
     touch root/ischroot
     cp $ABSOLUTE_PATH root/script.sh
     chmod +x script.sh
@@ -274,9 +262,7 @@ Pin-Priority: 200" > etc/apt/preferences
     exit
     cd -
 fi;
-#umount -l /root/root/temp-ramdisk
 #echo 3 > /proc/sys/vm/drop_caches 
-
 
 # ____   _    ____ _____   ____  
 # |  _ \ / \  |  _ \_   _| |___ \ 
@@ -308,14 +294,12 @@ else
 fi;
 sgdisk --print /dev/${DRIVE} || die
 
+
 if [ $SETUP_RAID == 1 ]; then # copy partition table to second drive
     info "[SETUP RAID]"
     sgdisk -R /dev/$DRIVE_RAID /dev/$DRIVE || die
     sgdisk -G /dev/$DRIVE_RAID || die
-fi;
-partprobe
-
-if [ $SETUP_RAID == 1 ]; then
+    partprobe
     echo y | mdadm --create --verbose /dev/md0 --level=$RAID_LEVEL --raid-devices=2 /dev/${DRIVE}4 /dev/${DRIVE_RAID}4 || die
     ROOTFS_DEV=md0
 fi;
@@ -358,12 +342,9 @@ rsync -aAX --info=progress2 --exclude={"/parentroot","/dev/*","/proc/*","/sys/*"
 sync
 
 info "[CHROOT INTO THE SYSTEM]"
-mount -o bind /proc proc
-mount -o bind /sys sys
-mount -o bind /dev dev
-mount -o bind /mnt mnt
+for dir in dev proc sys mnt; do mount --bind /$dir $dir; done
 echo "UUID=$(blkid -s UUID -o value /dev/${DRIVE}3) /boot ext4 defaults 0 2" > etc/fstab;
-if [ $EFI == 1 ]; then
+if [ modprobe efivars ]; then
     echo "UUID=$(blkid -s UUID -o value /dev/${DRIVE}2) /boot/efi vfat defaults 0 2" >> etc/fstab;
 fi
 
@@ -413,24 +394,21 @@ fi
 
 #service udev restart
 info "[INSTALL BOOTLOADER]"
-if [ $EFI == 1 ]; then
+if [ modprobe efivars ]; then
     info "[INSTALL EFI BOOTLOADER]"
     chroot . /bin/bash -c "su -c 'mkdir -p /boot/efi'"
     chroot . /bin/bash -c "su -c 'mount /dev/${DRIVE}2 /boot/efi'"
     chroot . /bin/bash -c "su -c 'apt-get -y install --reinstall grub-efi'"
     chroot . /bin/bash -c "su -c 'grub-install --efi-directory=/boot/efi /dev/${DRIVE}; update-grub'"
-    
-else
-    chroot . /bin/bash -c "su -c 'grub-install /dev/${DRIVE}; update-grub'"
-fi
-if [ $EFI == 1 ]; then
     if [ ! -e boot/efi/EFI/debian/grubx64.efi ]; then
         error "installing UEFI Bootloader possibly failed"
         die
     fi;
     debug "efibootmgr output"
     chroot . /bin/bash -c "su -c 'efibootmgr --verbose'"
-fi;
+else
+    chroot . /bin/bash -c "su -c 'grub-install /dev/${DRIVE}; update-grub'"
+fi
 
 chroot . /bin/bash -c "su -c 'finalize_chroot'"
 info "[EXIT CHROOT]"
