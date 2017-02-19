@@ -112,7 +112,6 @@ function die () {
 
 function error () {
     echo -e $RED$1$DEFAULT_COLOR
-    die
 }
 
 function partition_lvm () {
@@ -219,6 +218,7 @@ if [ ! -e /root/ischroot ]; then
     grep -q "Valid Release signature" debootstrap.log
     if [ $? -ne 0 ]; then
         error "debootstrap failed / release signatures not validated"
+        die
     fi;
     cd rootfs-debian
     mkdir parentroot
