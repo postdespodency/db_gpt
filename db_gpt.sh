@@ -397,7 +397,7 @@ chroot . /bin/bash -c "su -c 'find etc/ssh/ -name \*.pub -type f -exec  ssh-keyg
 
 #service udev restart
 info "[INSTALL BOOTLOADER]"
-if modprobe efivars; then
+if [ -e /tmp/is_efi ]; then
     info "[INSTALL EFI BOOTLOADER]"
     chroot . /bin/bash -c "su -c 'mkdir -p /boot/efi'"
     chroot . /bin/bash -c "su -c 'mount /dev/${DRIVE}2 /boot/efi'"
