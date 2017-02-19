@@ -256,6 +256,9 @@ Pin-Priority: 200" > etc/apt/preferences
     chroot . /bin/bash -c "su -c 'apt-get update'"
     cp /etc/network/interfaces etc/network/interfaces # copy host network configuration into new system
 
+    if modprobe efivars; then # returns wrong value in chroot
+        touch ./tmp/is_efi
+    fi
     debug "CHROOTING INTO RAMDISK SYSTEM!"
     chroot . /bin/bash -c "su -c '/root/script.sh | tee -a /tmp/install.log'"
 
@@ -344,7 +347,7 @@ sync
 info "[CHROOT INTO THE SYSTEM]"
 for dir in dev proc sys mnt; do mount --bind /$dir $dir; done
 echo "UUID=$(blkid -s UUID -o value /dev/${DRIVE}3) /boot ext4 defaults 0 2" > etc/fstab;
-if modprobe efivars; then
+if [ -e /tmp/is_efi ]; then
     echo "UUID=$(blkid -s UUID -o value /dev/${DRIVE}2) /boot/efi vfat defaults 0 2" >> etc/fstab;
 fi
 
